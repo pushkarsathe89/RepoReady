@@ -1,90 +1,123 @@
-# RepoReady (v2.1)
+# RepoReady
 
-**The Zero-Config GUI for Managing & Bootstrapping GitHub Repositories.**
+**The zero-config GUI for managing and bootstrapping GitHub repositories.**
 
-RepoReady (formerly Repo Automator) is a Python-based desktop application designed to streamline the workflow of developers managing dozens of repositories. It automates fetching, cloning, and—most importantly—**environment setup** (installing dependencies) for Python, Node.js, and Java projects.
+RepoReady is a Python desktop application that simplifies the workflow of developers who work with many repositories. It fetches, clones, and configures project environments — automatically detecting the right package manager for **Python**, **Node.js**, and **Java** codebases.
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue)
-![Status](https://img.shields.io/badge/status-active-success)
+![Platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macOS-lightgrey)
 
-## 🚀 Features
+## Features
 
-* **GitHub API Integration**: Fetch all your repositories (Personal & Org) with one click. Supports pagination and lazy loading.
-* **Smart Environment Detection**: Automatically identifies if a project needs `conda`, `uv`, `pip`, `npm`, or `maven` based on its files (`environment.yml`, `uv.lock`, `pyproject.toml`, `requirements.txt`).
-* **Bulk Operations**: Select 50+ repositories and click **INSTALL ENV**. The tool handles cloning, updating, and environment creation (`.venv`) in parallel logging.
-* **Advanced Filtering**: Filter by **Owner**, **Language**, **Date** (Created/Updated), or Name/Description.
-* **Persistent State**: Remembers your selections and filter settings between sessions.
-* **Zero-Crash Logging**: Includes safe logging handlers for Windows consoles (emoji-safe).
+- **One-click GitHub sync** — Fetch all of your personal and organization repositories. Pagination is handled automatically.
+- **Automatic environment detection** — Recognizes `conda`, `uv`, `pip`, `npm`, `yarn`, and Maven projects from their files (`environment.yml`, `uv.lock`, `pyproject.toml`, `requirements.txt`, `package.json`, `pom.xml`).
+- **Bulk setup** — Select as many repositories as you need and click **INSTALL ENV**. RepoReady clones, updates, and installs dependencies in a single pass.
+- **Advanced filtering** — Filter by owner, language, creation/update date, name, or description.
+- **Persistent state** — Your selections, filters, and settings are remembered between sessions.
+- **Safe logging** — Emoji-safe log output that copes with Windows console limitations.
 
-## 📦 Installation
+## Installation
 
-Prerequisites: Python 3.8+ and Git.
+**Prerequisites:** Python 3.8+ and Git.
 
-1. **Clone this repository**:
+```bash
+# 1. Clone this repository
+git clone https://github.com/pushkarsathe89/RepoReady.git
+cd RepoReady
 
-    ```bash
-    git clone https://github.com/yourusername/repo-automator.git
-    cd repo-automator
-    ```
+# 2. Install dependencies
+pip install -r requirements.txt
 
-2. **Install dependencies**:
+# 3. Run RepoReady
+python repoready.py
+```
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+## Usage
 
-    *(Ideally, you can let RepoReady manage its own environment in the future!)*
+1. **Connect** — Click **Configure Token** and enter a GitHub Personal Access Token (PAT), or use **Create PAT** to generate one with the required `repo` scope.
+2. **Target directory** — Click **Browse** to choose where repositories will be cloned.
+3. **Load** — Click **LOAD REPOSITORIES** to fetch your repositories.
+4. **Filter** — Use the **Filter** dialog to narrow the list by owner, language, or date.
+5. **Select and act** — Choose the repositories you want and run an action:
 
-3. **Run**:
+| Action | Behavior |
+| --- | --- |
+| ⬇ **CLONE ONLY** | Clones missing repositories (or runs `git pull` on existing ones). |
+| ⚙ **INSTALL ENV** | Clones, creates a virtual environment, and installs dependencies. |
 
-    ```bash
-    python repoready.py
-    ```
+Optional per-run options: *Skip 'git pull'* for faster offline runs, and *Open in VS Code* after setup.
 
-## 🛠 Usage
+## How environment detection works
 
-1. **Configuration**: Enter your GitHub Personal Access Token (PAT) and select a target local directory.
-2. **Load**: Click **LOAD REPOSITORIES** to fetch your list.
-3. **Filter**: Use the **🌪 Filter** dialog to narrow down to specific owners (e.g., `usnistgov`) or languages.
-4. **Select & Action**:
-    * **⬇ CLONE ONLY**: Just clones the repos (or `git pull` if they exist).
-    * **⚙ INSTALL ENV**: Clones AND creates virtual environments/installs dependencies.
-    * **Checkboxes**: "Skip 'git pull'" (for offline speed) or "Open in VS Code".
+| Project files | Installer used |
+| --- | --- |
+| `pyproject.toml` / `uv.lock` | `uv` |
+| `requirements.txt` | `pip` or `uv` |
+| `environment.yml` | `conda` |
+| `pom.xml` | Maven |
+| `package.json` | `npm` or `yarn` |
 
-## 🆚 Comparison
-
-Why use **RepoReady** over standard CLI tools?
+## Why RepoReady?
 
 | Feature | **RepoReady** | `meta` / `myrepos` (CLI) | VS Code Dev Containers |
 | :--- | :--- | :--- | :--- |
-| **Interface** | **GUI** (Visual selection, sorting) | CLI (Text-based config) | UI + JSON Config |
-| **Env Setup** | **Auto-detected** (Zero config) | Manual `scripts` required | Manual `.devcontainer` required |
-| **Cloning** | **Bulk API Fetch** (Auto-discovery) | Manual config entry | Single repo focus |
-| **Target User** | Managing 100+ mixed legacy repos | Git Ops / DevOps | Deep development on one repo |
-| **Learning Curve**| **Low** (Click & Run) | High (Config syntax) | Medium (Docker knowledge) |
+| **Interface** | GUI — visual selection and sorting | CLI — text-based config | UI + JSON config |
+| **Environment setup** | Auto-detected, zero config | Manual hooks required | Manual `.devcontainer` required |
+| **Cloning** | Bulk API fetch and auto-discovery | Manual config entry | Single-repo focus |
+| **Target user** | Developers managing many repositories | Git automation enthusiasts | Deep work on a single repo |
+| **Learning curve** | Low — click and run | High — config syntax | Medium — Docker knowledge |
 
-* **vs `meta`/`myrepos`**: These tools are excellent for version controlling a *list* of repos, but they don't natively know how to `pip install` or `npm install` based on file detection. You have to write shell hooks. RepoReady "just works" for standard Python/Node projects.
-* **vs Dev Containers**: Dev Containers provide perfect isolation using Docker. However, setting up a `.devcontainer` for 50 legacy research codes is a huge task. RepoReady runs locally on your machine, giving you immediate Intellisense support in VS Code without waiting for containers to build.
+- **`meta` / `myrepos`** manage a list of repositories but rely on custom shell hooks to install dependencies. RepoReady detects the project type and runs the appropriate installer out of the box.
+- **Dev Containers** provide strong isolation, but authoring a `.devcontainer` for every repository is a significant up-front effort. RepoReady runs locally, giving you immediate IDE support without container build times.
 
-## 🧪 Testing
+## Building a standalone desktop app
 
-We include a test suite to verify core command runners and detection logic.
+RepoReady is a Python desktop application (Tkinter). You can also build it into a
+single, self-contained executable that runs on machines **without** a Python
+installation.
+
+**Windows**
+
+```bat
+build.bat
+```
+
+**macOS / Linux**
 
 ```bash
-pip install pytest
+python -m pip install -r requirements.txt pyinstaller
+pyinstaller --noconfirm --clean RepoReady.spec
+```
+
+The packaged app is written to `dist/`:
+
+| Platform | Output |
+| --- | --- |
+| Windows | `dist\RepoReady.exe` |
+| macOS | `dist/RepoReady.app` |
+| Linux | `dist/RepoReady` |
+
+> **Note:** `git`, and the optional `uv` / `npm` / `yarn` / Maven toolchains that
+> RepoReady orchestrates, are still required separately on the target machine.
+
+## Testing
+
+The test suite covers the core command runner and environment-detection logic.
+
+```bash
 pytest tests/
 ```
 
-## 🤝 Contributing
+## Contributing
 
-Contributions are welcome! Please open an issue or submit a Pull Request.
+Contributions are welcome! Please open an issue or submit a pull request.
 
-1. Fork the repo.
-2. Create a branch (`git checkout -b feature/amazing-feature`).
-3. Commit changes.
-4. Push and open PR.
+1. Fork the repository.
+2. Create a branch: `git checkout -b feature/amazing-feature`.
+3. Commit your changes.
+4. Push and open a pull request.
 
-## 📄 License
+## License
 
-Distributed under the MIT License.
+Distributed under the [MIT License](LICENSE).

@@ -8,23 +8,17 @@ import webbrowser
 import json
 from datetime import datetime
 from pathlib import Path
-# Ensure requests and tkcalendar are installed
+# Third-party dependencies (install with: pip install -r requirements.txt)
 try:
     import requests
-except ImportError:
-    print("Installing requests...")
-    subprocess.run("pip install requests", shell=True)
-    import requests
-
-try:
     from tkcalendar import DateEntry
-except ImportError:
-    print("Installing tkcalendar...")
-    subprocess.run("pip install tkcalendar", shell=True)
-    from tkcalendar import DateEntry
+except ImportError as e:  # pragma: no cover - only hits when deps are missing
+    raise SystemExit(
+        f"Missing dependency: {e.name}. Please install the required packages "
+        "with: pip install -r requirements.txt"
+    )
 
 CONFIG_FILE = Path.home() / ".repoready_config.json"
-OLD_CONFIG_FILE = Path.home() / ".repo_automator_config.json"
 
 
 def save_config(data):
@@ -37,30 +31,13 @@ def save_config(data):
 
 def load_config():
     config = {}
-    
-    # 1. Try new config
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE, "r") as f:
                 config = json.load(f)
-        except:
+        except (OSError, json.JSONDecodeError):
+            # Ignore unreadable/corrupt config and start fresh
             pass
-    
-    # 2. Migration / Recovery: If token is missing, look in old config
-    if "github_token" not in config or not config["github_token"]:
-        if OLD_CONFIG_FILE.exists():
-            try:
-                print(f"Recovering token from {OLD_CONFIG_FILE}...")
-                with open(OLD_CONFIG_FILE, "r") as f:
-                    old_data = json.load(f)
-                    
-                if "github_token" in old_data:
-                    config["github_token"] = old_data["github_token"]
-                    # If we recovered something, save it to the new file
-                    save_config(config)
-            except Exception as e:
-                print(f"Migration failed: {e}")
-
     return config
 
 def run_cmd(cmd, cwd=None):
@@ -127,6 +104,52 @@ def log_safe(msg, callback=print):
         callback(msg_safe)
 
 
+def detect_installer_candidates(target_path, manual_installer="Auto (Smart)", log=lambda msg: None):
+    """Detect which package-manager installers apply to the project at *target_path*.
+
+    Returns a ``(candidates, project)`` tuple, where ``project`` carries the
+    per-file detection flags used later by the setup routine.
+    """
+    candidates = []
+
+    has_uv_files = os.path.exists(os.path.join(target_path, "uv.lock")) or \
+        os.path.exists(os.path.join(target_path, "pyproject.toml"))
+    has_conda_env = os.path.exists(os.path.join(target_path, "environment.yml"))
+    has_reqs = os.path.exists(os.path.join(target_path, "requirements.txt"))
+    has_py_toml = os.path.exists(os.path.join(target_path, "pyproject.toml"))
+
+    if manual_installer == "Auto (Smart)":
+        # Priority: uv (pyproject.toml/uv.lock) > conda (environment.yml) > uv (requirements.txt) > pip
+        uv_path = shutil.which("uv")
+
+        if has_uv_files:
+            if uv_path:
+                candidates.append("uv")
+            else:
+                log("  [Warning] pyproject.toml/uv.lock found, but 'uv' not installed/found. Skipping uv.")
+
+        if has_conda_env:
+            candidates.append("conda")
+
+        if has_reqs:
+            if uv_path and "uv" not in candidates:
+                candidates.append("uv")
+
+        # Fallback to pip
+        if has_reqs or has_py_toml:
+            candidates.append("pip")
+    else:
+        # User forced a specific installer
+        candidates.append(manual_installer)
+
+    return candidates, {
+        "has_uv_files": has_uv_files,
+        "has_conda_env": has_conda_env,
+        "has_reqs": has_reqs,
+        "has_py_toml": has_py_toml,
+    }
+
+
 def setup_repo(repo_url, parent_dir, options={}, log_callback=print):
     def log(m): log_safe(m, log_callback)
 
@@ -153,43 +176,10 @@ def setup_repo(repo_url, parent_dir, options={}, log_callback=print):
         return
 
     # 2. Detect Installer Strategy
-
-    candidates = []
-
-    # Check for files
-    has_uv_files = os.path.exists(os.path.join(target_path, "uv.lock")) or \
-        os.path.exists(os.path.join(target_path, "pyproject.toml"))
-    has_conda_env = os.path.exists(os.path.join(target_path, "environment.yml"))
-    has_reqs = os.path.exists(os.path.join(target_path, "requirements.txt"))
-    has_py_toml = os.path.exists(os.path.join(target_path, "pyproject.toml"))
-
-    if manual_installer == "Auto (Smart)":
-        # Priority: uv (if pyproject/uv.lock) > conda (if env.yml) > uv (if reqs) > pip
-        # If both env.yml and pyproject exist, we prioritize based on what looks like a clearer project def
-        # User requested: pyproject.toml -> try uv first, fail to pip/conda.
-
-        # Ensure check_uv has run so shutil.which finds it if it was just added
-        uv_path = shutil.which("uv")
-
-        if has_uv_files:
-            if uv_path:
-                candidates.append("uv")
-            else:
-                log("  [Warning] pyproject.toml/uv.lock found, but 'uv' not installed/found. Skipping uv.")
-
-        if has_conda_env:
-            candidates.append("conda")
-
-        if has_reqs:
-            if uv_path and "uv" not in candidates:
-                candidates.append("uv")
-
-        # Fallback to pip
-        if has_reqs or has_py_toml:
-            candidates.append("pip")
-    else:
-        # User forced a specific one
-        candidates.append(manual_installer)
+    candidates, project = detect_installer_candidates(target_path, manual_installer, log=log)
+    has_conda_env = project["has_conda_env"]
+    has_reqs = project["has_reqs"]
+    has_py_toml = project["has_py_toml"]
 
     # 3. Setup Loop
     success = False
@@ -302,7 +292,7 @@ def setup_repo(repo_url, parent_dir, options={}, log_callback=print):
 class RepoReadyApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("RepoReady v2.1")
+        self.root.title("RepoReady")
         self.root.geometry("950x750")
         self.root.configure(bg="#2d2d2d")
 
@@ -543,21 +533,6 @@ class RepoReadyApp:
         lbl_status = ttk.Label(status_frame, textvariable=self.status_var, foreground="#888888", font=("Consolas", 9))
         lbl_status.pack(side="left")
 
-    def open_token_dialog(self):
-        token = simpledialog.askstring("GitHub Token", "Enter your GitHub Personal Access Token (PAT):", show='*')
-        if token:
-            self.config["github_token"] = token
-            self.save_settings()
-            self.update_token_status()
-            messagebox.showinfo("Saved", "Token saved successfully!")
-
-    def update_token_status(self):
-        token = self.config.get("github_token", "")
-        if token and len(token) > 10:
-            self.lbl_token_status.config(text="✅ Connected (Token Saved)", foreground="#4CAF50") # Green
-        else:
-            self.lbl_token_status.config(text="❌ Not Configured", foreground="#FF5252") # Red
-
     def sort_by_column(self, col):
         # Simple column click sort
         self.sort_var.set(col.capitalize())
@@ -570,7 +545,6 @@ class RepoReadyApp:
             self.save_settings()
 
     def save_settings(self):
-        self.config["github_token"] = self.token_var.get().strip()
         self.config["target_dir"] = self.path_var.get().strip()
         save_config(self.config)
 
@@ -587,7 +561,7 @@ class RepoReadyApp:
         self.root.update_idletasks()
 
     def start_load_repos(self):
-        token = self.token_var.get().strip()
+        token = self.config.get("github_token", "").strip()
         if not token:
             messagebox.showerror("Error", "Please enter a GitHub Personal Access Token.")
             return
@@ -896,9 +870,10 @@ class RepoReadyApp:
             self.root.after(0, self.log, msg)
 
             try:
-                setup_repo(repo['clone_url'], parent_dir, options=options, log_callback=print)
+                setup_repo(repo['clone_url'], parent_dir, options=options,
+                           log_callback=lambda m: self.root.after(0, self.log, m))
             except Exception as e:
-                log_safe(f"Error processing {repo_name}: {e}")
+                self.root.after(0, self.log, f"Error processing {repo_name}: {e}")
 
         self.root.after(0, self.log, "Batch processing complete!")
         self.root.after(0, messagebox.showinfo, "Success", "All selected repositories have been processed.")
