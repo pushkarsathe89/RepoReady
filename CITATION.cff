@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use RepoReady in your research or work, please cite it as described in the README."
+title: "RepoReady"
+abstract: >-
+  A zero-config desktop GUI for cloning, managing, and bootstrapping GitHub
+  repositories, with automatic package-manager and environment detection.
+authors:
+  - family-names: Sathe
+    given-names: Pushkar
+    website: "https://github.com/pushkarsathe89"
+keywords:
+  - github
+  - git
+  - tkinter
+  - desktop-app
+  - developer-tools
+  - environment-setup
+license: MIT
+date-released: 2026-09-03
+version: "3.0"
+url: "https://github.com/pushkarsathe89/RepoReady"
+repository-code: "https://github.com/pushkarsathe89/RepoReady"
+preferred-citation:
+  type: software
+  title: "RepoReady: A zero-config GUI for cloning and bootstrapping GitHub repositories"
+  authors:
+    - family-names: Sathe
+      given-names: Pushkar
+  year: 2026
+  version: "3.0"
+  url: "https://github.com/pushkarsathe89/RepoReady"

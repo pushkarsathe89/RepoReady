@@ -118,6 +118,32 @@ Contributions are welcome! Please open an issue or submit a pull request.
 3. Commit your changes.
 4. Push and open a pull request.
 
+## How to Cite
+
+If RepoReady helps your research or workflow, please cite it so others can find
+it. A machine-readable citation is included in
+[`CITATION.cff`](CITATION.cff) — GitHub also exposes it through the
+**Cite this repository** button in the "About" sidebar of the repo page.
+
+**APA style:**
+
+> Sathe, P. S. (2026). *RepoReady: A zero-config GUI for cloning and
+> bootstrapping GitHub repositories* (Version 3.0) [Computer software].
+> <https://github.com/pushkarsathe89/RepoReady>
+
+**BibTeX:**
+
+```bibtex
+@software{repoready,
+  author  = {Pushkar Sathe},
+  title   = {RepoReady: A zero-config GUI for cloning and bootstrapping GitHub repositories},
+  year    = {2026},
+  version = {3.0},
+  url     = {https://github.com/pushkarsathe89/RepoReady},
+  license = {MIT}
+}
+```
+
 ## License
 
 Distributed under the [MIT License](LICENSE).
