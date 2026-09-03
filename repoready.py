@@ -413,6 +413,80 @@ def build_styles():
     # Progressbar
     style.configure("TProgressbar", background=C_ACCENT, troughcolor=C_SURFACE_2,
                     bordercolor=C_SURFACE_2, lightcolor=C_ACCENT, darkcolor=C_ACCENT)
+class Tooltip:
+    """A lightweight, styled tooltip that appears after a short hover delay.
+
+    Usage:
+        Tooltip(widget, "Helper text")
+    """
+
+    def __init__(self, widget, text, delay_ms=350):
+        self.widget = widget
+        self.text = text
+        self.delay_ms = delay_ms
+        self._after_id = None
+        self._tip = None
+
+        widget.bind("<Enter>", self._schedule, add="+")
+        widget.bind("<Leave>", self._dismiss, add="+")
+        widget.bind("<ButtonPress>", self._dismiss, add="+")
+        widget.bind("<Destroy>", self._on_destroy, add="+")
+
+    # -- hover lifecycle --------------------------------------------------- #
+    def _schedule(self, event):
+        self._cancel()
+        self._after_id = self.widget.after(
+            self.delay_ms, lambda: self._show(event))
+
+    def _dismiss(self, event=None):
+        self._cancel()
+        if self._tip is not None:
+            try:
+                self._tip.destroy()
+            except Exception:
+                pass
+            self._tip = None
+
+    def _cancel(self):
+        if self._after_id is not None:
+            try:
+                self.widget.after_cancel(self._after_id)
+            except Exception:
+                pass
+            self._after_id = None
+
+    def _on_destroy(self, event):
+        if getattr(event, "widget", None) is self.widget:
+            self._cancel()
+
+    # -- show/hide --------------------------------------------------------- #
+    def _show(self, event):
+        if self._tip is not None:
+            return
+
+        x, y = event.x_root + 16, event.y_root + 16
+
+        self._tip = tk.Toplevel(self.widget)
+        self._tip.wm_overrideredirect(True)
+        try:
+            self._tip.attributes("-topmost", True)
+        except Exception:
+            pass
+
+        frame = tk.Frame(self._tip, bg=C_BORDER, padx=1, pady=1)
+        frame.pack()
+        tk.Label(frame, text=self.text, bg="#1c2128", fg=C_TEXT, justify="left",
+                 font=(FONT, 9), padx=10, pady=6, wraplength=340).pack()
+
+        # Keep the tooltip on screen
+        self._tip.update_idletasks()
+        w, h = self._tip.winfo_reqwidth(), self._tip.winfo_reqheight()
+        sw, sh = self._tip.winfo_screenwidth(), self._tip.winfo_screenheight()
+        if x + w > sw:
+            x = sw - w - 4
+        if y + h > sh:
+            y = sh - h - 4
+        self._tip.wm_geometry(f"+{x}+{y}")
 class RepoReadyApp:
     def __init__(self, root):
         self.root = root
@@ -530,10 +604,17 @@ class RepoReadyApp:
                                   fg=C_MUTED, font=(FONT, 9, "bold"))
         self.lbl_token.pack(side="left", padx=(0, 12))
 
-        ttk.Button(token_box, text="Configure Token",
-                   command=self.open_token_dialog).pack(side="left", padx=(0, 6))
-        ttk.Button(token_box, text="Create PAT", style="Ghost.TButton",
-                   command=self.open_token_page).pack(side="left")
+        btn_token = ttk.Button(token_box, text="Configure Token",
+                               command=self.open_token_dialog)
+        btn_token.pack(side="left", padx=(0, 6))
+        Tooltip(btn_token, "Paste your GitHub Personal Access Token (PAT) here.\n"
+                           "Stored locally in ~/.repoready_config.json.")
+
+        btn_pat = ttk.Button(token_box, text="Create PAT", style="Ghost.TButton",
+                             command=self.open_token_page)
+        btn_pat.pack(side="left")
+        Tooltip(btn_pat, "Open github.com/settings/tokens/new to generate a\n"
+                         "new PAT with the 'repo' scope.")
 
     # ----------------------------------------------------------- toolbar - #
     def _build_toolbar(self):
@@ -548,6 +629,8 @@ class RepoReadyApp:
         self.entry_search.insert(0, self._SEARCH_PLACEHOLDER)
         self.entry_search.bind("<FocusIn>", self._search_focus_in)
         self.entry_search.bind("<FocusOut>", self._search_focus_out)
+        Tooltip(self.entry_search, "Filter repositories by name, description,\n"
+                                   "or language.")
 
         ttk.Label(bar, text="Sort", style="Muted.TLabel").pack(side="left", padx=(4, 6))
         self.sort_var = tk.StringVar(value="Updated")
@@ -556,14 +639,28 @@ class RepoReadyApp:
                                   values=["Updated", "Stars", "Name", "Created", "Owner"])
         sort_combo.bind("<<ComboboxSelected>>", lambda e: self.apply_filters())
         sort_combo.pack(side="left", padx=(0, 10))
+        Tooltip(sort_combo, "Sort repositories by Updated, Stars, Name,\n"
+                            "Created, or Owner.")
 
-        ttk.Button(bar, text="Filter", command=self.open_filter_dialog).pack(side="left", padx=(0, 6))
-        ttk.Button(bar, text="Select All", command=self.select_all_visible).pack(side="left", padx=(0, 6))
-        ttk.Button(bar, text="Clear Selection", command=self.clear_selection_memory).pack(side="left")
+        btn_filter = ttk.Button(bar, text="Filter", command=self.open_filter_dialog)
+        btn_filter.pack(side="left", padx=(0, 6))
+        Tooltip(btn_filter, "Open the filter dialog to narrow the list by\n"
+                            "owner, language, or date (Ctrl+D).")
+
+        btn_select_all = ttk.Button(bar, text="Select All", command=self.select_all_visible)
+        btn_select_all.pack(side="left", padx=(0, 6))
+        Tooltip(btn_select_all, "Select every repository currently visible (Ctrl+A).")
+
+        btn_clear_sel = ttk.Button(bar, text="Clear Selection", command=self.clear_selection_memory)
+        btn_clear_sel.pack(side="left")
+        Tooltip(btn_clear_sel, "Deselect all repositories and clear remembered\n"
+                               "selections for the next session.")
 
         self.btn_load = ttk.Button(bar, text="Load Repositories", style="Accent.TButton",
                                    command=self.start_load_repos)
         self.btn_load.pack(side="right", padx=(8, 0))
+        Tooltip(self.btn_load, "Fetch all of your GitHub repositories via the\n"
+                               "API. Press F5 to refresh.")
 # ------------------------------------------------------------- tree - #
     def _build_tree(self):
         frame = tk.Frame(self.root, bg=C_SURFACE)
@@ -632,7 +729,12 @@ class RepoReadyApp:
         self.path_var = tk.StringVar(value=self.config.get("target_dir", os.getcwd()))
         self.entry_path = ttk.Entry(row1, textvariable=self.path_var)
         self.entry_path.pack(side="left", fill="x", expand=True, padx=(0, 8))
-        ttk.Button(row1, text="Browse", command=self.browse_dir).pack(side="left")
+        Tooltip(self.entry_path, "Base folder where repositories are cloned.\n"
+                                 "Each repository goes into its own subfolder.")
+
+        btn_browse = ttk.Button(row1, text="Browse", command=self.browse_dir)
+        btn_browse.pack(side="left")
+        Tooltip(btn_browse, "Choose the target folder with a file dialog (Ctrl+O).")
 
         row2 = ttk.Frame(footer, style="Card.TFrame")
         row2.pack(fill="x")
@@ -641,18 +743,35 @@ class RepoReadyApp:
         combo = ttk.Combobox(row2, textvariable=self.installer_var, state="readonly",
                              width=13, values=["Auto (Smart)", "uv", "pip", "conda"])
         combo.pack(side="left", padx=(0, 18))
+        Tooltip(combo, "'Auto (Smart)' detects the package manager from\n"
+                       "project files. You can also force uv, pip, or conda.")
 
         self.opt_skip_update = tk.BooleanVar(value=False)
-        ttk.Checkbutton(row2, text="Skip git pull", variable=self.opt_skip_update).pack(side="left", padx=(0, 14))
+        cb_skip = ttk.Checkbutton(row2, text="Skip git pull", variable=self.opt_skip_update)
+        cb_skip.pack(side="left", padx=(0, 14))
+        Tooltip(cb_skip, "When a repository already exists, RepoReady runs\n"
+                         "'git pull'. Check this to skip the pull for faster,\n"
+                         "offline runs.")
+
         self.opt_vscode = tk.BooleanVar(value=False)
-        ttk.Checkbutton(row2, text="Open in VS Code", variable=self.opt_vscode).pack(side="left")
+        cb_vscode = ttk.Checkbutton(row2, text="Open in VS Code", variable=self.opt_vscode)
+        cb_vscode.pack(side="left")
+        Tooltip(cb_vscode, "Open the repository in VS Code after setup.\n"
+                           "Requires the 'code' command on your PATH.")
 
         self.btn_clone = ttk.Button(row2, text="Clone Only",
                                     command=lambda: self.start_processing(install=False, clone=True))
         self.btn_clone.pack(side="right", padx=(8, 0))
+        Tooltip(self.btn_clone, "Clone the selected repositories only, without\n"
+                                "installing dependencies. Existing repos just\n"
+                                "get a 'git pull' (unless 'Skip git pull' is on).")
+
         self.btn_run = ttk.Button(row2, text="Install Env", style="Accent.TButton",
                                   command=lambda: self.start_processing(install=True, clone=False))
         self.btn_run.pack(side="right")
+        Tooltip(self.btn_run, "Clone the selected repositories and auto-detect\n"
+                              "their environment (pip, uv, conda, npm, Maven,\n"
+                              "etc.), creating it for you.")
 
         self.progress = ttk.Progressbar(footer, mode="determinate", maximum=100)
         self.progress.pack(fill="x", pady=(12, 0))
@@ -667,13 +786,20 @@ class RepoReadyApp:
                  font=(FONT, 9, "bold")).pack(side="left")
         self.log_count = tk.Label(head, text="", bg=C_SURFACE, fg=C_MUTED, font=(FONT, 8))
         self.log_count.pack(side="left", padx=(8, 0))
-        ttk.Button(head, text="Copy", style="Ghost.TButton",
-                   command=self.copy_log).pack(side="right")
-        ttk.Button(head, text="Clear", style="Ghost.TButton",
-                   command=self.clear_log).pack(side="right", padx=(0, 6))
+        btn_copy = ttk.Button(head, text="Copy", style="Ghost.TButton",
+                   command=self.copy_log)
+        btn_copy.pack(side="right")
+        Tooltip(btn_copy, "Copy the entire log to the clipboard.")
+
+        btn_clear = ttk.Button(head, text="Clear", style="Ghost.TButton",
+                   command=self.clear_log)
+        btn_clear.pack(side="right", padx=(0, 6))
+        Tooltip(btn_clear, "Clear the log console.")
+
         self.btn_toggle_log = ttk.Button(head, text="Hide", style="Ghost.TButton",
                                          command=self.toggle_log)
         self.btn_toggle_log.pack(side="right", padx=(0, 6))
+        Tooltip(self.btn_toggle_log, "Show or hide the log console.")
 
         self.log_container = tk.Frame(card, bg=C_SURFACE)
         self.log_container.pack(fill="both")
@@ -742,6 +868,14 @@ class RepoReadyApp:
     def set_status(self, msg):
         self.status_var.set(str(msg))
 
+    def _after(self, fn):
+        """Schedule *fn* on the Tk main thread, ignoring failures while
+        the main window is closing or the event loop is not running."""
+        try:
+            self.root.after(0, fn)
+        except RuntimeError:
+            pass
+
     # ------------------------------------------------------------ search - #
     _SEARCH_PLACEHOLDER = "Search repositories…"
 
@@ -782,6 +916,8 @@ class RepoReadyApp:
         token_entry.pack(anchor="w")
         token_entry.focus_set()
         self._token_entry = token_entry
+        Tooltip(token_entry, "Paste your GitHub Personal Access Token here.\n"
+                             "Requires the 'repo' scope.")
 
         act_row = tk.Frame(body, bg=C_SURFACE)
         act_row.pack(anchor="w", pady=(10, 0))
@@ -790,21 +926,32 @@ class RepoReadyApp:
                              activeforeground=C_ACCENT, cursor="hand2", padx=12, pady=3)
         btn_show.pack(side="left")
         btn_show.configure(command=lambda: self._toggle_token_visibility(btn_show))
-        tk.Button(act_row, text="Create a PAT…", bg=C_SURFACE_2, fg=C_ACCENT,
-                  relief="flat", activebackground=C_SURFACE_2, activeforeground=C_ACCENT,
-                  cursor="hand2", padx=12, pady=3,
-                  command=self.open_token_page).pack(side="left", padx=(8, 0))
+        Tooltip(btn_show, "Reveal or hide the token text.")
+
+        btn_create = tk.Button(act_row, text="Create a PAT…", bg=C_SURFACE_2, fg=C_ACCENT,
+                               relief="flat", activebackground=C_SURFACE_2,
+                               activeforeground=C_ACCENT, cursor="hand2", padx=12, pady=3,
+                               command=self.open_token_page)
+        btn_create.pack(side="left", padx=(8, 0))
+        Tooltip(btn_create, "Open GitHub to generate a new personal access\n"
+                            "token with the 'repo' scope.")
 
         btns = tk.Frame(body, bg=C_SURFACE)
         btns.pack(anchor="e", pady=(16, 0))
-        tk.Button(btns, text="Cancel", bg=C_SURFACE_2, fg=C_TEXT, relief="flat",
+        btn_cancel = tk.Button(btns, text="Cancel", bg=C_SURFACE_2, fg=C_TEXT, relief="flat",
                   activebackground=C_SURFACE_2, activeforeground=C_TEXT,
                   cursor="hand2", padx=18, pady=5,
-                  command=dlg.destroy).pack(side="right", padx=(8, 0))
-        tk.Button(btns, text="Save Token", bg=C_BTN, fg="#ffffff", relief="flat",
+                  command=dlg.destroy)
+        btn_cancel.pack(side="right", padx=(8, 0))
+        Tooltip(btn_cancel, "Discard changes without saving.")
+
+        btn_save = tk.Button(btns, text="Save Token", bg=C_BTN, fg="#ffffff", relief="flat",
                   activebackground=C_BTN_HI, activeforeground="#ffffff",
                   cursor="hand2", padx=18, pady=5, font=(FONT, 9, "bold"),
-                  command=lambda: self._save_token_from_dialog(dlg)).pack(side="right")
+                  command=lambda: self._save_token_from_dialog(dlg))
+        btn_save.pack(side="right")
+        Tooltip(btn_save, "Save the token locally and verify it against\n"
+                          "the GitHub API.")
 
     def _toggle_token_visibility(self, btn):
         if self._token_entry["show"] == "•":
@@ -836,19 +983,19 @@ class RepoReadyApp:
                 r = requests.get("https://api.github.com/user", headers=headers, timeout=5)
                 if r.status_code == 200:
                     user = r.json().get("login", "unknown")
-                    self.root.after(0, lambda: self.lbl_token.config(
+                    self._after(lambda: self.lbl_token.config(
                         text=f"Connected as {user}", fg=C_SUCCESS))
                 elif r.status_code == 401:
-                    self.root.after(0, lambda: self.lbl_token.config(
+                    self._after(lambda: self.lbl_token.config(
                         text="Invalid token", fg=C_DANGER))
                 else:
-                    self.root.after(0, lambda: self.lbl_token.config(
+                    self._after(lambda: self.lbl_token.config(
                         text=f"API error {r.status_code}", fg=C_WARNING))
             except requests.exceptions.ConnectionError:
-                self.root.after(0, lambda: self.lbl_token.config(
+                self._after(lambda: self.lbl_token.config(
                     text="Offline — using saved settings", fg=C_WARNING))
             except Exception:
-                self.root.after(0, lambda: self.lbl_token.config(
+                self._after(lambda: self.lbl_token.config(
                     text="Check failed", fg=C_WARNING))
 
         threading.Thread(target=check_api, daemon=True).start()
@@ -1028,16 +1175,25 @@ class RepoReadyApp:
 
         btns = tk.Frame(main, bg=C_SURFACE)
         btns.pack(fill="x", pady=(12, 0))
-        tk.Button(btns, text="Apply Filter", bg=C_BTN, fg="#ffffff", relief="flat",
+        btn_apply = tk.Button(btns, text="Apply Filter", bg=C_BTN, fg="#ffffff", relief="flat",
                   activebackground=C_BTN_HI, activeforeground="#ffffff", cursor="hand2",
                   padx=18, pady=5, font=(FONT, 9, "bold"),
-                  command=apply).pack(side="right", padx=(8, 0))
-        tk.Button(btns, text="Select All", bg=C_SURFACE_2, fg=C_TEXT, relief="flat",
-                  activebackground=C_SURFACE_2, activeforeground=C_TEXT, cursor="hand2",
-                  padx=18, pady=5, command=select_all).pack(side="right", padx=(8, 0))
-        tk.Button(btns, text="Cancel", bg=C_SURFACE_2, fg=C_TEXT, relief="flat",
-                  activebackground=C_SURFACE_2, activeforeground=C_TEXT, cursor="hand2",
-                  padx=18, pady=5, command=dlg.destroy).pack(side="right", padx=(8, 0))
+                  command=apply)
+        btn_apply.pack(side="right", padx=(8, 0))
+        Tooltip(btn_apply, "Apply the selected owner, language, and date\n"
+                           "filters to the repository list.")
+
+        btn_sel_all = tk.Button(btns, text="Select All", bg=C_SURFACE_2, fg=C_TEXT,
+                  relief="flat", activebackground=C_SURFACE_2, activeforeground=C_TEXT,
+                  cursor="hand2", padx=18, pady=5, command=select_all)
+        btn_sel_all.pack(side="right", padx=(8, 0))
+        Tooltip(btn_sel_all, "Select every owner and language.")
+
+        btn_cancel_f = tk.Button(btns, text="Cancel", bg=C_SURFACE_2, fg=C_TEXT,
+                  relief="flat", activebackground=C_SURFACE_2, activeforeground=C_TEXT,
+                  cursor="hand2", padx=18, pady=5, command=dlg.destroy)
+        btn_cancel_f.pack(side="right", padx=(8, 0))
+        Tooltip(btn_cancel_f, "Close the dialog without applying filters.")
 
     def sort_by_column(self, col):
         if self.sort_var.get() == col:
